@@ -26,6 +26,19 @@ class TwigGrab extends Plugin
         parent::init();
         self::$plugin = $this;
 
+        // Register grab cache directory with Craft's cache clearing (available on all requests)
+        Event::on(
+            ClearCaches::class,
+            ClearCaches::EVENT_REGISTER_CACHE_OPTIONS,
+            function (RegisterCacheOptionsEvent $event) {
+                $event->options[] = [
+                    'key' => 'twig-grab-compiled-templates',
+                    'label' => 'Twig Grab compiled templates',
+                    'action' => $this->getGrabCachePath(),
+                ];
+            }
+        );
+
         $request = Craft::$app->getRequest();
 
         if ($request->getIsConsoleRequest()) {
@@ -70,19 +83,6 @@ class TwigGrab extends Plugin
                 if ($contentType && !str_contains($contentType, 'text/html')) {
                     self::$enabled = false;
                 }
-            }
-        );
-
-        // Register grab cache directory with Craft's cache clearing
-        Event::on(
-            ClearCaches::class,
-            ClearCaches::EVENT_REGISTER_CACHE_OPTIONS,
-            function (RegisterCacheOptionsEvent $event) {
-                $event->options[] = [
-                    'key' => 'twig-grab-compiled-templates',
-                    'label' => 'Twig Grab compiled templates',
-                    'action' => $this->getGrabCachePath(),
-                ];
             }
         );
     }

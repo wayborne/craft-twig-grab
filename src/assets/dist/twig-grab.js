@@ -2,7 +2,7 @@
  * Twig Grab — Frontend overlay
  *
  * Vanilla web component with Shadow DOM.
- * Parses twig-grab HTML comments, builds a WeakMap for O(1) hover lookup,
+ * Parses twig-grab HTML comments, builds a region tree with DOM Ranges,
  * and renders a highlight overlay with template name + line number.
  */
 (function () {
@@ -14,13 +14,16 @@
     // ── Region tree ──────────────────────────────────────────────────
 
     class TwigGrabRegion {
-        constructor(data) {
+        constructor(data, startComment) {
             this.type = data.type;         // 'template' | 'block' | 'include'
             this.template = data.template;
             this.line = data.line || 0;
             this.block = data.block || '';
             this.children = [];
-            this.domNodes = [];            // real DOM nodes inside this region
+            this.parent = null;
+            this.startComment = startComment;
+            this.endComment = null;
+            this.range = null;             // DOM Range from start to end comment
         }
 
         get label() {
@@ -33,6 +36,11 @@
             }
             return label;
         }
+
+        getBoundingRect() {
+            if (!this.range) return null;
+            return this.range.getBoundingClientRect();
+        }
     }
 
     // ── Comment parser ───────────────────────────────────────────────
@@ -40,51 +48,81 @@
     function parseCommentTree(root) {
         const regions = [];
         const stack = [];
-        const nodeToRegion = new WeakMap();
+        const allRegions = [];
 
         const walker = document.createTreeWalker(
             root,
-            NodeFilter.SHOW_COMMENT | NodeFilter.SHOW_ELEMENT,
+            NodeFilter.SHOW_COMMENT,
             null
         );
 
         let node;
         while ((node = walker.nextNode())) {
-            if (node.nodeType === Node.COMMENT_NODE) {
-                const text = node.textContent;
+            const text = node.textContent;
 
-                if (text.startsWith(COMMENT_START_PREFIX)) {
-                    const json = text.slice(COMMENT_START_PREFIX.length).trim();
-                    try {
-                        const data = JSON.parse(json);
-                        const region = new TwigGrabRegion(data);
+            if (text.startsWith(COMMENT_START_PREFIX)) {
+                const json = text.slice(COMMENT_START_PREFIX.length).trim();
+                try {
+                    const data = JSON.parse(json);
+                    const region = new TwigGrabRegion(data, node);
 
-                        if (stack.length > 0) {
-                            stack[stack.length - 1].children.push(region);
-                        } else {
-                            regions.push(region);
-                        }
-
-                        stack.push(region);
-                    } catch (e) {
-                        // Malformed comment — skip
-                    }
-                } else if (text.startsWith(COMMENT_END_PREFIX)) {
                     if (stack.length > 0) {
-                        stack.pop();
+                        region.parent = stack[stack.length - 1];
+                        stack[stack.length - 1].children.push(region);
+                    } else {
+                        regions.push(region);
                     }
+
+                    stack.push(region);
+                    allRegions.push(region);
+                } catch (e) {
+                    // Malformed comment — skip
                 }
-            } else if (node.nodeType === Node.ELEMENT_NODE) {
-                // Map this element to the deepest (current) region
+            } else if (text.startsWith(COMMENT_END_PREFIX)) {
                 if (stack.length > 0) {
-                    const currentRegion = stack[stack.length - 1];
-                    currentRegion.domNodes.push(node);
-                    nodeToRegion.set(node, currentRegion);
+                    const region = stack.pop();
+                    region.endComment = node;
+
+                    // Create a DOM Range spanning from start to end comment
+                    try {
+                        const range = document.createRange();
+                        range.setStartAfter(region.startComment);
+                        range.setEndBefore(node);
+                        region.range = range;
+                    } catch (e) {
+                        // Range creation can fail if comments are in different containers
+                    }
                 }
             }
         }
 
-        return { regions, nodeToRegion };
+        return { regions, allRegions };
+    }
+
+    // ── Hit testing ──────────────────────────────────────────────────
+
+    function findRegionAtPoint(allRegions, x, y) {
+        // Find the smallest (most specific) region containing the point.
+        // Regions are in document order; children are always more specific than parents.
+        let best = null;
+        let bestArea = Infinity;
+
+        for (const region of allRegions) {
+            if (!region.range) continue;
+
+            const rect = region.getBoundingRect();
+            if (!rect || rect.width === 0 || rect.height === 0) continue;
+
+            if (x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom) {
+                const area = rect.width * rect.height;
+                if (area < bestArea) {
+                    bestArea = area;
+                    best = region;
+                }
+            }
+        }
+
+        return best;
     }
 
     // ── Web component ────────────────────────────────────────────────
@@ -94,8 +132,7 @@
             super();
 
             this._active = false;
-            this._regions = [];
-            this._nodeToRegion = new WeakMap();
+            this._allRegions = [];
             this._currentRegion = null;
             this._parsed = false;
 
@@ -214,8 +251,7 @@
         _parseIfNeeded() {
             if (this._parsed) return;
             const result = parseCommentTree(document.documentElement);
-            this._regions = result.regions;
-            this._nodeToRegion = result.nodeToRegion;
+            this._allRegions = result.allRegions;
             this._parsed = true;
         }
 
@@ -256,16 +292,14 @@
         _onMouseMove(e) {
             if (!this._active) return;
 
-            const target = e.target;
-
             // Don't highlight inside our own shadow DOM
-            if (this.shadowRoot.contains(target)) {
+            if (this.shadowRoot.contains(e.target)) {
                 this._overlay.classList.remove('visible');
                 this._currentRegion = null;
                 return;
             }
 
-            const region = this._nodeToRegion.get(target);
+            const region = findRegionAtPoint(this._allRegions, e.clientX, e.clientY);
 
             if (!region) {
                 this._overlay.classList.remove('visible');
@@ -276,12 +310,15 @@
             if (region === this._currentRegion) return;
 
             this._currentRegion = region;
-            this._highlightRegion(region, target);
+            this._highlightRegion(region);
         }
 
-        _highlightRegion(region, target) {
-            // Get the bounding rect of the hovered element
-            const rect = target.getBoundingClientRect();
+        _highlightRegion(region) {
+            const rect = region.getBoundingRect();
+            if (!rect || rect.width === 0 || rect.height === 0) {
+                this._overlay.classList.remove('visible');
+                return;
+            }
 
             this._overlay.style.top = rect.top + 'px';
             this._overlay.style.left = rect.left + 'px';

@@ -29,12 +29,12 @@ class SourceCommentStartNode extends Node
             $data['block'] = $blockName;
         }
 
-        $json = json_encode($data, JSON_UNESCAPED_SLASHES);
+        $json = json_encode($data, JSON_UNESCAPED_SLASHES | JSON_HEX_APOS);
 
         $compiler
             ->write("if (\\wayborne\\twiggrab\\TwigGrab::\$enabled) {\n")
             ->indent()
-            ->write("echo '<!-- twig-grab:start " . addslashes($json) . " -->';\n")
+            ->write("echo '<!-- twig-grab:start " . $json . " -->';\n")
             ->outdent()
             ->write("}\n");
     }

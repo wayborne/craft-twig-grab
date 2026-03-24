@@ -25,17 +25,17 @@ class CommentedIncludeNode extends Node
             'type' => 'include',
             'template' => $name,
             'line' => $line,
-        ], JSON_UNESCAPED_SLASHES);
+        ], JSON_UNESCAPED_SLASHES | JSON_HEX_APOS);
 
         $endJson = json_encode([
             'type' => 'include',
             'template' => $name,
-        ], JSON_UNESCAPED_SLASHES);
+        ], JSON_UNESCAPED_SLASHES | JSON_HEX_APOS);
 
         $compiler
             ->write("if (\\wayborne\\twiggrab\\TwigGrab::\$enabled) {\n")
             ->indent()
-            ->write("echo '<!-- twig-grab:start " . addslashes($startJson) . " -->';\n")
+            ->write("echo '<!-- twig-grab:start " . $startJson . " -->';\n")
             ->outdent()
             ->write("}\n");
 
@@ -44,7 +44,7 @@ class CommentedIncludeNode extends Node
         $compiler
             ->write("if (\\wayborne\\twiggrab\\TwigGrab::\$enabled) {\n")
             ->indent()
-            ->write("echo '<!-- twig-grab:end " . addslashes($endJson) . " -->';\n")
+            ->write("echo '<!-- twig-grab:end " . $endJson . " -->';\n")
             ->outdent()
             ->write("}\n");
     }

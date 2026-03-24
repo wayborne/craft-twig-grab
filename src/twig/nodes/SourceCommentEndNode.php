@@ -20,12 +20,12 @@ class SourceCommentEndNode extends Node
         $json = json_encode([
             'type' => $this->getAttribute('type'),
             'template' => $this->getAttribute('template_name'),
-        ], JSON_UNESCAPED_SLASHES);
+        ], JSON_UNESCAPED_SLASHES | JSON_HEX_APOS);
 
         $compiler
             ->write("if (\\wayborne\\twiggrab\\TwigGrab::\$enabled) {\n")
             ->indent()
-            ->write("echo '<!-- twig-grab:end " . addslashes($json) . " -->';\n")
+            ->write("echo '<!-- twig-grab:end " . $json . " -->';\n")
             ->outdent()
             ->write("}\n");
     }
