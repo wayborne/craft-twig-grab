@@ -1,4 +1,6 @@
 /vendor/
+/notes/
+/screenshots/
 .DS_Store
 .idea/
 *.swp
