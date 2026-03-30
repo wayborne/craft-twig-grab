@@ -6,6 +6,7 @@ use Craft;
 use craft\base\Model;
 use craft\base\Plugin;
 use craft\events\RegisterCacheOptionsEvent;
+use craft\helpers\FileHelper;
 use craft\utilities\ClearCaches;
 use craft\web\View;
 use Twig\Cache\FilesystemCache;
@@ -128,7 +129,7 @@ class TwigGrab extends Plugin
         $grabCachePath = $this->getGrabCachePath();
 
         if (is_dir($grabCachePath)) {
-            Craft::$app->getPath()->removeDirectory($grabCachePath);
+            FileHelper::removeDirectory($grabCachePath);
         }
     }
 }
