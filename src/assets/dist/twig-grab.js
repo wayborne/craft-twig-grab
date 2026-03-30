@@ -10,6 +10,8 @@
 
     const COMMENT_START_PREFIX = ' twig-grab:start ';
     const COMMENT_END_PREFIX = ' twig-grab:end ';
+    const CONFIG = window.__twigGrabConfig || {};
+    const SHORTCUT_KEY = CONFIG.shortcutKey || 'g';
 
     // ── Region tree ──────────────────────────────────────────────────
 
@@ -134,7 +136,8 @@
             this._active = false;
             this._allRegions = [];
             this._currentRegion = null;
-            this._parsed = false;
+            this._observer = null;
+            this._reparseTimer = null;
 
             const shadow = this.attachShadow({ mode: 'open' });
 
@@ -166,6 +169,21 @@
                         transition: background 0.15s, border-color 0.15s;
                         box-shadow: 0 2px 8px rgba(0,0,0,0.3);
                         line-height: 1;
+                    }
+
+                    .twig-grab-shortcut {
+                        position: fixed;
+                        bottom: 60px;
+                        right: 16px;
+                        background: #1e293b;
+                        color: #94a3b8;
+                        font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, monospace;
+                        font-size: 10px;
+                        padding: 3px 7px;
+                        border-radius: 4px;
+                        pointer-events: none;
+                        white-space: nowrap;
+                        box-shadow: 0 2px 6px rgba(0,0,0,0.25);
                     }
 
                     .twig-grab-button:hover {
@@ -211,15 +229,45 @@
                         color: #94a3b8;
                         margin-right: 4px;
                     }
+
+                    .twig-grab-overlay.copied {
+                        animation: twig-grab-flash 0.4s ease-out;
+                    }
+
+                    @keyframes twig-grab-flash {
+                        0%   { background: rgba(20, 184, 166, 0.35); border-color: #5eead4; }
+                        100% { background: rgba(20, 184, 166, 0.08); border-color: #14b8a6; }
+                    }
+
+                    .twig-grab-copied-toast {
+                        position: fixed;
+                        bottom: 68px;
+                        right: 16px;
+                        background: #1e293b;
+                        color: #5eead4;
+                        font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, monospace;
+                        font-size: 12px;
+                        padding: 6px 12px;
+                        border-radius: 6px;
+                        pointer-events: none;
+                        opacity: 0;
+                        transition: opacity 0.2s;
+                        box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+                    }
+
+                    .twig-grab-copied-toast.visible {
+                        opacity: 1;
+                    }
                 </style>
 
-                <button class="twig-grab-button" title="Twig Grab — click to activate">
+                <button class="twig-grab-button" title="Twig Grab">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M12 2L2 7l10 5 10-5-10-5z"/>
                         <path d="M2 17l10 5 10-5"/>
                         <path d="M2 12l10 5 10-5"/>
                     </svg>
                 </button>
+                <div class="twig-grab-shortcut"></div>
 
                 <div class="twig-grab-overlay">
                     <div class="twig-grab-label">
@@ -227,32 +275,66 @@
                         <span class="twig-grab-label-name"></span>
                     </div>
                 </div>
+
+                <div class="twig-grab-copied-toast">Copied</div>
             `;
 
             this._button = shadow.querySelector('.twig-grab-button');
             this._overlay = shadow.querySelector('.twig-grab-overlay');
             this._labelType = shadow.querySelector('.twig-grab-label-type');
             this._labelName = shadow.querySelector('.twig-grab-label-name');
+            this._toast = shadow.querySelector('.twig-grab-copied-toast');
+            this._shortcutHint = shadow.querySelector('.twig-grab-shortcut');
+            this._shortcutHint.textContent = SHORTCUT_KEY.toUpperCase();
+            this._toastTimer = null;
 
             this._onButtonClick = this._onButtonClick.bind(this);
             this._onMouseMove = this._onMouseMove.bind(this);
+            this._onClick = this._onClick.bind(this);
             this._onKeyDown = this._onKeyDown.bind(this);
+            this._onGlobalKeyDown = this._onGlobalKeyDown.bind(this);
         }
 
         connectedCallback() {
             this._button.addEventListener('click', this._onButtonClick);
+            window.addEventListener('keydown', this._onGlobalKeyDown);
         }
 
         disconnectedCallback() {
             this._deactivate();
             this._button.removeEventListener('click', this._onButtonClick);
+            window.removeEventListener('keydown', this._onGlobalKeyDown);
         }
 
-        _parseIfNeeded() {
-            if (this._parsed) return;
+        _parse() {
             const result = parseCommentTree(document.documentElement);
             this._allRegions = result.allRegions;
-            this._parsed = true;
+        }
+
+        _scheduleReparse() {
+            clearTimeout(this._reparseTimer);
+            this._reparseTimer = setTimeout(() => {
+                this._parse();
+                this._currentRegion = null;
+            }, 80);
+        }
+
+        _hasTwigGrabComments(node) {
+            if (node.nodeType === Node.COMMENT_NODE) {
+                const t = node.textContent;
+                return t.startsWith(COMMENT_START_PREFIX) || t.startsWith(COMMENT_END_PREFIX);
+            }
+            if (node.nodeType === Node.ELEMENT_NODE) {
+                const walker = document.createTreeWalker(node, NodeFilter.SHOW_COMMENT, null);
+                let c;
+                while ((c = walker.nextNode())) {
+                    const t = c.textContent;
+                    if (t.startsWith(COMMENT_START_PREFIX) || t.startsWith(COMMENT_END_PREFIX)) {
+                        return true;
+                    }
+                }
+            }
+            return false;
         }
 
         _onButtonClick(e) {
@@ -265,20 +347,67 @@
         }
 
         _activate() {
-            this._parseIfNeeded();
+            this._parse();
             this._active = true;
             this._button.classList.add('active');
+            this._shortcutHint.style.display = 'none';
             window.addEventListener('mousemove', this._onMouseMove, true);
+            window.addEventListener('click', this._onClick, true);
             window.addEventListener('keydown', this._onKeyDown, true);
+
+            // Watch for DOM changes that include twig-grab comments
+            // (Alpine x-if, Sprig/htmx swaps) — ignore trivial updates like x-text
+            this._observer = new MutationObserver((mutations) => {
+                for (const m of mutations) {
+                    for (const node of m.addedNodes) {
+                        if (this._hasTwigGrabComments(node)) {
+                            this._scheduleReparse();
+                            return;
+                        }
+                    }
+                    for (const node of m.removedNodes) {
+                        if (this._hasTwigGrabComments(node)) {
+                            this._scheduleReparse();
+                            return;
+                        }
+                    }
+                }
+            });
+            this._observer.observe(document.body, { childList: true, subtree: true });
         }
 
         _deactivate() {
             this._active = false;
             this._button.classList.remove('active');
             this._overlay.classList.remove('visible');
+            this._shortcutHint.style.display = '';
             this._currentRegion = null;
+            clearTimeout(this._reparseTimer);
+            if (this._observer) {
+                this._observer.disconnect();
+                this._observer = null;
+            }
             window.removeEventListener('mousemove', this._onMouseMove, true);
+            window.removeEventListener('click', this._onClick, true);
             window.removeEventListener('keydown', this._onKeyDown, true);
+        }
+
+        _onGlobalKeyDown(e) {
+            if (e.key !== SHORTCUT_KEY) return;
+
+            // Don't trigger when typing in form fields
+            const tag = (e.target.tagName || '').toLowerCase();
+            if (tag === 'input' || tag === 'textarea' || tag === 'select' || e.target.isContentEditable) return;
+
+            // Don't trigger with modifier keys (let Alt+G, Ctrl+G, etc. pass through)
+            if (e.metaKey || e.ctrlKey || e.altKey) return;
+
+            e.preventDefault();
+            if (this._active) {
+                this._deactivate();
+            } else {
+                this._activate();
+            }
         }
 
         _onKeyDown(e) {
@@ -292,8 +421,11 @@
         _onMouseMove(e) {
             if (!this._active) return;
 
-            // Don't highlight inside our own shadow DOM
-            if (this.shadowRoot.contains(e.target)) {
+            // Don't highlight when hovering our own component. In capture-phase
+            // listeners, shadow DOM retargets e.target to the host element — check
+            // the real target via composedPath().
+            const realTarget = e.composedPath()[0];
+            if (this.shadowRoot.contains(realTarget)) {
                 this._overlay.classList.remove('visible');
                 this._currentRegion = null;
                 return;
@@ -328,6 +460,178 @@
 
             this._labelType.textContent = region.type;
             this._labelName.textContent = region.label;
+        }
+
+        // ── Copy to clipboard ───────────────────────────────────────
+
+        _onClick(e) {
+            if (!this._active) return;
+
+            // Let clicks on our own shadow DOM elements through (e.g. the toggle button).
+            // composedPath() gives the real target before shadow DOM retargeting.
+            const realTarget = e.composedPath()[0];
+            if (this.shadowRoot.contains(realTarget)) return;
+
+            e.preventDefault();
+            e.stopPropagation();
+
+            if (!this._currentRegion) return;
+            this._copyContext(this._currentRegion);
+        }
+
+        _copyContext(region) {
+            const html = this._getRegionHtml(region);
+            const ancestors = this._buildAncestorChain(region);
+            const plainText = this._formatPlainText(region, html, ancestors);
+            const jsonData = this._formatJson(region, html, ancestors);
+            const htmlClip = this._formatHtmlClip(region, html, ancestors, jsonData);
+
+            this._writeToClipboard(plainText, htmlClip);
+        }
+
+        _writeToClipboard(plainText, htmlClip) {
+            try {
+                const clipboardItem = new ClipboardItem({
+                    'text/plain': new Blob([plainText], { type: 'text/plain' }),
+                    'text/html': new Blob([htmlClip], { type: 'text/html' }),
+                });
+
+                navigator.clipboard.write([clipboardItem]).then(() => {
+                    this._flashCopied();
+                }).catch(() => {
+                    this._writeTextFallback(plainText);
+                });
+            } catch (e) {
+                this._writeTextFallback(plainText);
+            }
+        }
+
+        _writeTextFallback(plainText) {
+            navigator.clipboard.writeText(plainText).then(() => {
+                this._flashCopied();
+            }).catch(() => {
+                // Clipboard API unavailable (e.g. insecure context)
+            });
+        }
+
+        _getRegionHtml(region) {
+            if (!region.range) return '';
+
+            const fragment = region.range.cloneContents();
+
+            // Strip twig-grab comments from the cloned fragment
+            const walker = document.createTreeWalker(fragment, NodeFilter.SHOW_COMMENT, null);
+            const toRemove = [];
+            let node;
+            while ((node = walker.nextNode())) {
+                if (node.textContent.startsWith(COMMENT_START_PREFIX) ||
+                    node.textContent.startsWith(COMMENT_END_PREFIX)) {
+                    toRemove.push(node);
+                }
+            }
+            toRemove.forEach(n => n.parentNode.removeChild(n));
+
+            const div = document.createElement('div');
+            div.appendChild(fragment);
+            let html = div.innerHTML.trim();
+
+            // Truncate if very large
+            const MAX_HTML = 3000;
+            if (html.length > MAX_HTML) {
+                html = html.substring(0, MAX_HTML) + '\n<!-- ... truncated -->';
+            }
+
+            return html;
+        }
+
+        _buildAncestorChain(region) {
+            const chain = [];
+            let current = region.parent;
+            while (current) {
+                chain.push({
+                    type: current.type,
+                    template: current.template,
+                    line: current.line,
+                    block: current.block,
+                });
+                current = current.parent;
+            }
+            return chain;
+        }
+
+        _formatPlainText(region, html, ancestors) {
+            let text = '';
+
+            // Selected region info
+            text += `[${region.type}] ${region.label}\n\n`;
+            text += html + '\n';
+
+            // Ancestor chain
+            if (ancestors.length > 0) {
+                text += '\nTemplate chain:\n';
+                for (const a of ancestors) {
+                    let entry = '  in ' + a.type;
+                    if (a.block) entry += ' "' + a.block + '"';
+                    entry += ' at ' + a.template;
+                    if (a.line) entry += ':' + a.line;
+                    text += entry + '\n';
+                }
+            }
+
+            return text;
+        }
+
+        _formatJson(region, html, ancestors) {
+            return JSON.stringify({
+                type: region.type,
+                template: region.template,
+                line: region.line,
+                block: region.block || undefined,
+                html: html,
+                ancestors: ancestors,
+            });
+        }
+
+        _formatHtmlClip(region, html, ancestors, jsonData) {
+            // HTML format with embedded JSON metadata
+            let clip = '<pre><code>' + this._escapeHtml(html) + '</code></pre>\n';
+            clip += '<p><strong>' + this._escapeHtml(region.label) + '</strong></p>\n';
+
+            if (ancestors.length > 0) {
+                clip += '<ul>\n';
+                for (const a of ancestors) {
+                    let entry = a.type;
+                    if (a.block) entry += ' "' + a.block + '"';
+                    entry += ' at ' + a.template;
+                    if (a.line) entry += ':' + a.line;
+                    clip += '  <li>' + this._escapeHtml(entry) + '</li>\n';
+                }
+                clip += '</ul>\n';
+            }
+
+            // Embed structured JSON as a hidden data attribute for programmatic access
+            clip += '<div data-twig-grab="' + this._escapeHtml(jsonData) + '" style="display:none"></div>';
+
+            return clip;
+        }
+
+        _escapeHtml(str) {
+            return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        }
+
+        _flashCopied() {
+            // Flash the overlay
+            this._overlay.classList.remove('copied');
+            // Force reflow to restart animation
+            void this._overlay.offsetWidth;
+            this._overlay.classList.add('copied');
+
+            // Show toast
+            this._toast.classList.add('visible');
+            clearTimeout(this._toastTimer);
+            this._toastTimer = setTimeout(() => {
+                this._toast.classList.remove('visible');
+            }, 1200);
         }
     }
 

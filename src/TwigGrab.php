@@ -3,18 +3,23 @@
 namespace wayborne\twiggrab;
 
 use Craft;
+use craft\base\Model;
 use craft\base\Plugin;
 use craft\events\RegisterCacheOptionsEvent;
 use craft\utilities\ClearCaches;
 use craft\web\View;
+use Twig\Cache\FilesystemCache;
 use wayborne\twiggrab\assets\GrabAssetBundle;
+use wayborne\twiggrab\models\Settings;
 use wayborne\twiggrab\twig\TwigGrabExtension;
 use yii\base\Event;
+use yii\web\Response;
 
 class TwigGrab extends Plugin
 {
     public static TwigGrab $plugin;
     public string $schemaVersion = '1.0.0';
+    public bool $hasCpSettings = false;
 
     /**
      * Static runtime flag checked by compiled templates before echoing annotations.
@@ -64,20 +69,29 @@ class TwigGrab extends Plugin
         // Register the Twig extension (NodeVisitor for annotations)
         Craft::$app->view->registerTwigExtension(new TwigGrabExtension());
 
-        // Register the frontend JS asset bundle
+        // Register the frontend JS asset bundle + config
         Event::on(
             View::class,
             View::EVENT_BEFORE_RENDER_TEMPLATE,
             function () {
-                Craft::$app->getView()->registerAssetBundle(GrabAssetBundle::class);
+                $view = Craft::$app->getView();
+                $view->registerAssetBundle(GrabAssetBundle::class);
+
+                /** @var Settings $settings */
+                $settings = $this->getSettings();
+                $config = json_encode([
+                    'shortcutKey' => $settings->shortcutKey,
+                ], JSON_UNESCAPED_SLASHES);
+                $view->registerJs("window.__twigGrabConfig=$config;", View::POS_HEAD);
             }
         );
 
         // Suppress annotations for non-HTML responses
         Event::on(
-            \yii\web\Response::class,
-            \yii\web\Response::EVENT_BEFORE_SEND,
-            function (\yii\base\Event $event) {
+            Response::class,
+            Response::EVENT_BEFORE_SEND,
+            function (Event $event) {
+                /** @var Response $response */
                 $response = $event->sender;
                 $contentType = $response->getHeaders()->get('Content-Type', '');
                 if ($contentType && !str_contains($contentType, 'text/html')) {
@@ -85,6 +99,11 @@ class TwigGrab extends Plugin
                 }
             }
         );
+    }
+
+    protected function createSettingsModel(): ?Model
+    {
+        return new Settings();
     }
 
     private function swapTwigCache(): void
@@ -96,7 +115,7 @@ class TwigGrab extends Plugin
         }
 
         $twig = Craft::$app->view->getTwig();
-        $twig->setCache(new \Twig\Cache\FilesystemCache($grabCachePath));
+        $twig->setCache(new FilesystemCache($grabCachePath));
     }
 
     private function getGrabCachePath(): string

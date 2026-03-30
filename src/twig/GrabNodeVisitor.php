@@ -8,16 +8,46 @@ use wayborne\twiggrab\twig\nodes\SourceCommentStartNode;
 use Twig\Environment;
 use Twig\Node\BlockNode;
 use Twig\Node\Expression\ConstantExpression;
-use Twig\Node\IncludeNode;
 use Twig\Node\EmbedNode;
+use Twig\Node\IncludeNode;
 use Twig\Node\ModuleNode;
 use Twig\Node\Node;
 use Twig\NodeVisitor\NodeVisitorInterface;
 
 class GrabNodeVisitor implements NodeVisitorInterface
 {
+    /**
+     * Maps embed index → embedded template name.
+     * Populated from anonymous embed modules in enterNode,
+     * consumed by EmbedNode handling in leaveNode.
+     * @var array<string, string>
+     */
+    private array $embedTemplateNames = [];
+
     public function enterNode(Node $node, Environment $env): Node
     {
+        // Embedded templates are stored as attributes (not child nodes) of the main
+        // ModuleNode, so the traverser never visits them. Extract the mapping here:
+        // each anonymous module's index → its parent (the actual embedded template name).
+        // Clear the map for each new module to prevent index collisions across templates
+        // (embed indices are sequential integers starting from 0 per module).
+        if ($node instanceof ModuleNode && $node->hasAttribute('embedded_templates')) {
+            $this->embedTemplateNames = [];
+            foreach ($node->getAttribute('embedded_templates') as $embedded) {
+                if (!$embedded instanceof ModuleNode) {
+                    continue;
+                }
+                $index = $embedded->getAttribute('index');
+                if ($index === null || !$embedded->hasNode('parent')) {
+                    continue;
+                }
+                $parent = $embedded->getNode('parent');
+                if ($parent instanceof ConstantExpression && $parent->getAttribute('value') !== false) {
+                    $this->embedTemplateNames[$index] = $parent->getAttribute('value');
+                }
+            }
+        }
+
         return $node;
     }
 
@@ -31,9 +61,15 @@ class GrabNodeVisitor implements NodeVisitorInterface
             return $this->handleBlockNode($node);
         }
 
-        // Static includes only (not embeds, not dynamic)
-        if ($node instanceof IncludeNode && !$node instanceof EmbedNode) {
-            return $this->handleIncludeNode($node);
+        // Embeds (must check before IncludeNode since EmbedNode extends it)
+        if ($node instanceof EmbedNode) {
+            $name = $this->embedTemplateNames[$node->getAttribute('index')] ?? null;
+            return new CommentedIncludeNode($node, 'embed', $name);
+        }
+
+        // Includes (static and dynamic)
+        if ($node instanceof IncludeNode) {
+            return new CommentedIncludeNode($node);
         }
 
         return $node;
@@ -76,18 +112,6 @@ class GrabNodeVisitor implements NodeVisitorInterface
         ]));
 
         return $node;
-    }
-
-    private function handleIncludeNode(IncludeNode $node): Node
-    {
-        $expr = $node->getNode('expr');
-
-        // Only wrap static includes (literal template name)
-        if (!$expr instanceof ConstantExpression) {
-            return $node;
-        }
-
-        return new CommentedIncludeNode($node);
     }
 
     public function getPriority(): int
