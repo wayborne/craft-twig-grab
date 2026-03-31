@@ -69,7 +69,10 @@ return [
 
 - [ ] Drill-down navigation through nested templates
 - [ ] Click-to-lock selection
-- [ ] Open-in-editor integration
+
+## Inspired By
+
+[React Grab](https://github.com/aidenybai/react-grab) by [Aiden Bai](https://github.com/aidenybai) — the original concept for React. Twig Grab brings the same idea to server-rendered Craft CMS templates.
 
 ## License
 
