@@ -1,60 +1,43 @@
-# Twig Grab
+# Twig Grab for Craft CMS
 
-A Craft CMS 5 plugin that lets developers hover over any element in the browser, see which Twig template rendered it, and copy that context to clipboard for AI coding agents.
+**Instantly see which Twig template rendered any element on your page.**
 
-## Requirements
+Twig Grab adds a developer overlay to your Craft CMS site that lets you hover over any element and immediately see which template is responsible for it. Click to copy the full template context to your clipboard — ready to paste into your editor or AI coding assistant.
 
-- Craft CMS 5.0.0 or later
-- PHP 8.2 or later
+Think of it as browser DevTools, but for your Twig templates.
+
+## Features
+
+- **Hover to identify** — Activate grab mode and hover over any element to see its source template and line number
+- **Click to copy** — One click copies the element's HTML and full template chain to your clipboard
+- **Template chain** — See the complete ancestry: which template included which block, all the way up to your layout
+- **Works with everything** — Static includes, dynamic includes, embeds, and blocks are all supported
+- **Dynamic content aware** — Content injected by Alpine.js, Sprig, htmx, or any JavaScript framework is automatically detected
+- **Zero impact on visitors** — Annotations are only served to logged-in users. Anonymous visitors always get clean, unmodified HTML
+- **No frontend dependencies** — Pure vanilla JavaScript with Shadow DOM isolation. No framework conflicts, no CSS bleed
 
 ## Installation
 
+### Plugin Store
+
+Search for **Twig Grab** in the Craft Plugin Store and click Install.
+
+### Composer
+
 ```bash
 composer require wayborne/twig-grab
-```
-
-Then install the plugin from the Craft Control Panel under **Settings > Plugins**, or via the CLI:
-
-```bash
 php craft plugin/install twig-grab
 ```
 
-### Local Development
+## How It Works
 
-Add as a path repository in your project's `composer.json`:
+1. Press **G** (or click the floating icon) to activate grab mode
+2. Hover over any element — a highlight overlay shows the template name and line number
+3. Click to copy the template context to your clipboard
+4. Press **Escape** or **G** again to deactivate
 
-```json
-{
-    "repositories": [
-        {
-            "type": "path",
-            "url": "../craft-twig-grab"
-        }
-    ]
-}
-```
+The copied output includes the element's HTML, template type, and the full template chain — giving you (or your AI assistant) everything needed to find and edit the right file.
 
-Then require it:
-
-```bash
-composer require wayborne/twig-grab @dev
-```
-
-## Usage
-
-When a logged-in user visits the frontend of your Craft site:
-
-1. A floating icon appears in the bottom-right corner of the page
-2. Press **G** (or click the icon) to activate **grab mode**
-3. Hover over any element to see which Twig template rendered it
-4. **Click** to copy the element's HTML and template context to your clipboard
-5. Press **Escape** or **G** again to deactivate
-
-The shortcut key is ignored when typing in form fields.
-
-### What gets copied
-
-**Plain text** — ready to paste into an AI coding agent:
 ```
 [include] _components/card.twig:12
 
@@ -65,44 +48,29 @@ Template chain:
   in template at _layouts/base.twig:1
 ```
 
-**HTML** — includes a hidden `data-twig-grab` attribute with full structured JSON for programmatic access.
-
-### Supported template types
-
-- Templates (non-extending)
-- Blocks
-- Static includes (`{% include '_components/card' %}`)
-- Dynamic includes (`{% include templateVar %}`)
-- Embeds (`{% embed '_components/card' %}`)
-
-### Dynamic content
-
-Twig Grab automatically detects DOM changes while grab mode is active. Content injected by Alpine.js (`x-if`), Sprig, htmx, or other JavaScript frameworks is picked up without needing to re-activate.
-
 ## Configuration
 
-Create `config/twig-grab.php` in your Craft project to customize settings:
+Optionally customize the shortcut key via `config/twig-grab.php`:
 
 ```php
 <?php
 
 return [
-    // The key to toggle grab mode (default: 'g')
     'shortcutKey' => 'g',
 ];
 ```
 
-## Under the Hood
+## Requirements
 
-- A **Twig NodeVisitor** injects HTML comment annotations around template boundaries during compilation
-- Annotated templates are stored in a **separate compiled template cache**, so anonymous visitors always get clean HTML
-- A **vanilla web component** with Shadow DOM parses the comment tree and renders a highlight overlay on hover
-- A **MutationObserver** watches for DOM changes while active, re-parsing when new twig-grab comments appear
-- All annotations are gated behind a **runtime flag** — non-HTML responses (JSON, XML, RSS) are never annotated
+- Craft CMS 5.0 or later
+- PHP 8.2 or later
 
 ## Roadmap
 
-- [ ] Drill-down navigation (ArrowUp/Down for z-stack, ArrowLeft/Right for siblings)
+- [ ] Drill-down navigation through nested templates
 - [ ] Click-to-lock selection
 - [ ] Open-in-editor integration
-- [ ] Live editing foundation
+
+## License
+
+[MIT](LICENSE)
