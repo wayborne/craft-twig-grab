@@ -241,8 +241,6 @@
 
                     .twig-grab-copied-toast {
                         position: fixed;
-                        bottom: 68px;
-                        right: 16px;
                         background: #1e293b;
                         color: #5eead4;
                         font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, monospace;
@@ -253,6 +251,7 @@
                         opacity: 0;
                         transition: opacity 0.2s;
                         box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+                        transform: translate(-50%, -100%);
                     }
 
                     .twig-grab-copied-toast.visible {
@@ -351,6 +350,9 @@
             this._active = true;
             this._button.classList.add('active');
             this._shortcutHint.style.display = 'none';
+            document.documentElement.style.cursor = 'crosshair';
+            this._lastClickX = 0;
+            this._lastClickY = 0;
             window.addEventListener('mousemove', this._onMouseMove, true);
             window.addEventListener('click', this._onClick, true);
             window.addEventListener('keydown', this._onKeyDown, true);
@@ -381,6 +383,7 @@
             this._button.classList.remove('active');
             this._overlay.classList.remove('visible');
             this._shortcutHint.style.display = '';
+            document.documentElement.style.cursor = '';
             this._currentRegion = null;
             clearTimeout(this._reparseTimer);
             if (this._observer) {
@@ -476,6 +479,8 @@
             e.stopPropagation();
 
             if (!this._currentRegion) return;
+            this._lastClickX = e.clientX;
+            this._lastClickY = e.clientY;
             this._copyContext(this._currentRegion);
         }
 
@@ -625,6 +630,10 @@
             // Force reflow to restart animation
             void this._overlay.offsetWidth;
             this._overlay.classList.add('copied');
+
+            // Position toast near the click
+            this._toast.style.left = this._lastClickX + 'px';
+            this._toast.style.top = (this._lastClickY - 12) + 'px';
 
             // Show toast
             this._toast.classList.add('visible');
