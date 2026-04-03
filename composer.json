@@ -14,7 +14,7 @@
         "developer-tools"
     ],
     "support": {
-        "email": "support@wayborn.com",
+        "email": "support@wayborne.com",
         "issues": "https://github.com/wayborne/craft-twig-grab/issues?state=open",
         "source": "https://github.com/wayborne/craft-twig-grab/",
         "docs": "https://github.com/wayborne/craft-twig-grab/"
@@ -23,7 +23,7 @@
     "authors": [
         {
             "name": "Wayborne",
-            "homepage": "https://wayborn.com"
+            "homepage": "https://wayborne.com"
         }
     ],
     "require": {

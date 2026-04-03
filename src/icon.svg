@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Background rounded square -->
+  <rect width="472" height="472" x="20" y="20" rx="64" ry="64" fill="#2f3642"/>
+
+  <!-- Left curly brace { -->
+  <path d="M148 190 c-20 0-34 14-34 34 l0 18 c0 16-12 28-28 28 l0 24 c16 0 28 12 28 28 l0 18 c0 20 14 34 34 34"
+        fill="none" stroke="#cdd5e0" stroke-width="24" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- Right curly brace } -->
+  <path d="M364 190 c20 0 34 14 34 34 l0 18 c0 16 12 28 28 28 l0 24 c-16 0-28 12-28 28 l0 18 c0 20-14 34-34 34"
+        fill="none" stroke="#cdd5e0" stroke-width="24" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- Crosshair circle -->
+  <circle cx="256" cy="272" r="52" fill="none" stroke="#4db8a4" stroke-width="16"/>
+  <!-- Crosshair center dot -->
+  <circle cx="256" cy="272" r="8" fill="#4db8a4"/>
+  <!-- Crosshair lines -->
+  <line x1="256" y1="204" x2="256" y2="236" stroke="#4db8a4" stroke-width="16" stroke-linecap="round"/>
+  <line x1="256" y1="308" x2="256" y2="340" stroke="#4db8a4" stroke-width="16" stroke-linecap="round"/>
+  <line x1="188" y1="272" x2="220" y2="272" stroke="#4db8a4" stroke-width="16" stroke-linecap="round"/>
+  <line x1="292" y1="272" x2="324" y2="272" stroke="#4db8a4" stroke-width="16" stroke-linecap="round"/>
+
+  <!-- Cursor arrow -->
+  <g transform="translate(310, 258)">
+    <path d="M0 0 l0 72 l20-22 l26 46 l16-10 l-26-44 l28-6 Z"
+          fill="#ffffff" stroke="#2f3642" stroke-width="6" stroke-linejoin="round"/>
+  </g>
+</svg>
