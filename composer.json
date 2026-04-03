@@ -2,7 +2,7 @@
     "name": "wayborne/twig-grab",
     "description": "Hover over any element to see which Twig template rendered it",
     "type": "craft-plugin",
-    "version": "0.1.0",
+    "version": "1.0.0",
     "keywords": [
         "craft",
         "cms",
@@ -33,6 +33,14 @@
     "autoload": {
         "psr-4": {
             "wayborne\\twiggrab\\": "src/"
+        }
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^11.0"
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "wayborne\\twiggrab\\tests\\": "tests/"
         }
     },
     "config": {
