@@ -2,7 +2,7 @@
 
 All notable changes to Twig Grab will be documented in this file.
 
-## [1.0.0] - 2026-04-03
+## 1.0.0 - 2026-04-03
 
 ### Added
 - Hover to identify any element's source Twig template and line number
